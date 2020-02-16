@@ -4,6 +4,8 @@
 #include <queue>
 #include <algorithm>
 
+//  g++ hash_code.cpp  && ./a.out && echo "file:"  && cat output
+
 struct Video
 {
     int idx;
@@ -44,6 +46,7 @@ struct DataCenter
         int used_cash = 0;
         for(auto &cache: caches)
             if (cache.video_idx.size() > 0) used_cash++;
+
         std::ofstream fout("output");
         fout << used_cash << "\n";
         for(int i = 0; i < caches.size(); ++i)
@@ -162,8 +165,14 @@ int main()
         data_center.endpoints[ep_idx]->closed.push_back(false);
     }
 
+    std::cout << "------- Sort: ";
     data_center.SortEpVideo();
-    // data_center.TestData();
+    std::cout << "done -------" << std::endl;
+    std::cout << "------- Sorted Data: -------\n";
+    data_center.TestData();
+    std::cout << "------- Arrange by cache: ";
     data_center.Arrange();
+    std::cout << "done -------" << std::endl;
+    std::cout << "------- Write output: -------\n";
     data_center.Output();
 }
