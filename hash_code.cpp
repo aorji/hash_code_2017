@@ -1,18 +1,34 @@
 #include <vector>
 #include <iostream>
 #include <fstream>
+#include <queue>
+#include <algorithm>
+
+struct Video
+{
+    int idx;
+    int request;
+    int size;
+
+};
+
+bool operator<(const Video &l, const Video &r)
+{
+    return l.request/l.size < r.request/r.size;
+}
 
 struct Endpoint
 {
     size_t idx;
     int datacenter_latency;
-    std::vector<std::pair<int, int>> video_request;
+    std::vector<Video> video_request;
+    std::vector<bool> closed;
 };
 
 struct Cache
 {
     int capacity;
-    std::vector<std::pair<Endpoint*, int>> endpoint_latency;
+    std::priority_queue<std::pair<int, Endpoint*>> endpoint_latency; //<lat, ep>
     std::vector<int> video_idx;
 };
 
@@ -23,10 +39,82 @@ struct DataCenter
     std::vector<Cache> caches;
     std::vector<int> video_size;
 
+    void Output(void)
+    {
+        int used_cash = 0;
+        for(auto &cache: caches)
+            if (cache.video_idx.size() > 0) used_cash++;
+        std::ofstream fout("output");
+        fout << used_cash << "\n";
+        for(int i = 0; i < caches.size(); ++i)
+        {
+            std::cout << "caches " << i << ": " << std::endl;
+            if (caches[i].video_idx.size())
+            {
+                std::cout << "video idx: ";
+                fout << i << " ";
+                for(auto j = 0; j < caches[i].video_idx.size(); ++j)
+                {
+                    if (j != 0)
+                        fout << " ";
+                    fout << caches[i].video_idx[j];
+                    std::cout << caches[i].video_idx[j] << " ";
+                }
+                std::cout << std::endl;
+                fout << "\n";
+            }
+        }
+
+    }
+
+    void TestData(void)
+    {
+        int i = 0;
+        for(auto ep: endpoints)
+        {
+            std::cout << "ep " << i << ":" << std::endl;
+            std::cout << "dc_latency: " << ep->datacenter_latency << std::endl;
+            std::cout << "video:" << std::endl;
+            for(auto & video: ep->video_request)
+            {
+                std::cout << video.idx << ": " << video.request/video.size << std::endl;
+            }
+            i++;
+        }
+    }
+
+    void SortEpVideo(void)
+    {
+        for(auto & ep: endpoints)
+            std::sort(ep->video_request.begin(), ep->video_request.end());
+    }
+
     /*processing*/
     void Arrange(void)
     {
-        
+        //fill caches
+        for(auto & cache: caches) //for all caches
+        {
+            while(!cache.endpoint_latency.empty()) //till we have ep connected to the particular cache
+            {
+                auto ep = cache.endpoint_latency.top().second;  //get ep with less latency
+                for(int i = 0; i < ep->video_request.size(); ++i)   //go though all videos starting from the most profitamle
+                {
+                    if (ep->closed[i])  //if video was already cached, continue
+                        continue;
+                    if (cache.capacity >= ep->video_request[i].size)    //if cache has enough space for a particular video
+                    {
+                        if (std::find(std::begin(cache.video_idx), std::end(cache.video_idx), ep->video_request[i].idx) == std::end(cache.video_idx)) //and not stored in cache yet
+                        {
+                            cache.capacity -= ep->video_request[i].size;    //update capacity
+                            cache.video_idx.push_back(ep->video_request[i].idx);    //save video index
+                        }
+                        ep->closed[i] = true;   // mark video as stored in cache
+                    }
+                }
+                cache.endpoint_latency.pop();   //del pointer to ep from cache's ep list
+            }
+        }
     }
 };
 
@@ -50,6 +138,7 @@ int main()
     {
         int cache_num;
         Endpoint *ep = new Endpoint;
+
         ep->idx = i;
         data_center.endpoints[i] = ep;
         fin >> ep->datacenter_latency >> cache_num;
@@ -59,7 +148,7 @@ int main()
             int cache_idx, latency;
             fin >> cache_idx >> latency;
             data_center.caches[cache_idx].capacity = X;
-            data_center.caches[cache_idx].endpoint_latency.push_back({ep, latency});
+            data_center.caches[cache_idx].endpoint_latency.push({latency, ep});
 
         }
     }
@@ -69,26 +158,12 @@ int main()
     {
         int video_idx, ep_idx, req;
         fin >> video_idx >> ep_idx >> req;
-        data_center.endpoints[ep_idx]->video_request.push_back({video_idx, req});
+        data_center.endpoints[ep_idx]->video_request.push_back({video_idx, req, data_center.video_size[video_idx]});
+        data_center.endpoints[ep_idx]->closed.push_back(false);
     }
 
+    data_center.SortEpVideo();
+    // data_center.TestData();
     data_center.Arrange();
-// int i = 0;
-//     for(auto ep: data_center.endpoints)
-//     {
-//         std::cout << "ep" << i << std::endl;
-//         std::cout << ep->datacenter_latency << std::endl;
-//         for(auto vr: ep->video_request)
-//             std::cout << vr.first << " " << vr.second << std::endl;
-//         i++;
-//     }
-// int i = 0;
-//     for(auto cache: data_center.caches)
-//     {
-//         std::cout << "cache" << i << std::endl;
-//         std::cout << cache.capacity << std::endl;
-//         for(auto vr: cache.endpoint_latency)
-//             std::cout << vr.first->idx << " " << vr.second << std::endl;
-//         i++;
-//     }
+    data_center.Output();
 }
